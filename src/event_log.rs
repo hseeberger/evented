@@ -1,7 +1,8 @@
 use crate::pool::Pool;
+use error_ext::BoxError;
 use futures::{Stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, Encode, Executor, Postgres, Row, Type};
+use sqlx::{postgres::PgRow, Encode, Executor, Postgres, Row, Transaction, Type};
 use std::{fmt::Debug, marker::PhantomData, num::NonZeroU64};
 use thiserror::Error;
 use tracing::instrument;
@@ -28,16 +29,18 @@ where
         })
     }
 
-    #[instrument(skip(self, events))]
-    pub async fn persist<E>(
+    #[instrument(skip(self, events, listener))]
+    pub async fn persist<E, L>(
         &mut self,
         id: &I,
         last_seq_no: Option<NonZeroU64>,
         type_name: &'static str,
         events: &[E],
+        listener: &mut Option<L>,
     ) -> Result<NonZeroU64, Error>
     where
-        E: Serialize,
+        E: Serialize + Sync,
+        L: EventListener,
     {
         assert!(!events.is_empty());
 
@@ -70,6 +73,13 @@ where
                 .execute(&mut *tx)
                 .await
                 .map_err(|error| Error::Sqlx("cannot execute statement".to_string(), error))?;
+
+            if let Some(listener) = listener {
+                listener
+                    .listen(&event, &mut tx)
+                    .await
+                    .map_err(Error::Listener)?;
+            }
         }
 
         tx.commit()
@@ -104,6 +114,33 @@ where
     }
 }
 
+/// Invoked for each event during the `persist` transaction.
+#[trait_variant::make(Send)]
+pub trait EventListener {
+    async fn listen<E>(
+        &mut self,
+        event: &E,
+        tx: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), BoxError>
+    where
+        E: Sync;
+}
+
+pub struct NoEventListener;
+
+impl EventListener for NoEventListener {
+    async fn listen<E>(
+        &mut self,
+        _event: &E,
+        _tx: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), BoxError>
+    where
+        E: Sync,
+    {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("{0}")]
@@ -120,6 +157,9 @@ pub enum Error {
 
     #[error("expected sequence number {0:?}, but was {1:?}")]
     UnexpectedSeqNo(Option<NonZeroU64>, Option<NonZeroU64>),
+
+    #[error("listener error")]
+    Listener(#[source] BoxError),
 }
 
 fn into_seq_no(row: PgRow) -> Result<Option<NonZeroU64>, Error> {

@@ -1,7 +1,7 @@
 mod event_log;
 mod pool;
 
-use crate::event_log::EventLog;
+use crate::event_log::{EventListener, EventLog, NoEventListener};
 use futures::{future::ok, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use sqlx::{Encode, Postgres, Type};
@@ -16,7 +16,7 @@ pub trait Entity {
     type Command: Debug;
 
     /// The type of events.
-    type Event: Debug + Serialize + for<'de> Deserialize<'de> + Send;
+    type Event: Debug + Serialize + for<'de> Deserialize<'de> + Send + Sync;
 
     /// The type of rejections.
     type Rejection: Debug;
@@ -35,20 +35,63 @@ pub trait Entity {
     fn handle_event(&mut self, event: Self::Event);
 }
 
+/// Builder for an event-sourced entity.
+pub struct EventSourcedEntityBuilder<E, L> {
+    entity: E,
+    listener: Option<L>,
+}
+
+impl<E, L> EventSourcedEntityBuilder<E, L> {
+    pub fn with_listener<T>(self, listener: T) -> EventSourcedEntityBuilder<E, T> {
+        EventSourcedEntityBuilder {
+            entity: self.entity,
+            listener: Some(listener),
+        }
+    }
+
+    /// Load the [EventSourcedEntity] for this [Entity].
+    pub async fn build(
+        self,
+        id: E::Id,
+        event_log: EventLog<E::Id>,
+    ) -> Result<EventSourcedEntity<E, L>, event_log::Error>
+    where
+        E: Entity,
+    {
+        let events = event_log.current_events_by_id::<E::Event>(&id).await;
+        let entity = events
+            .try_fold(self.entity, |mut state, (_, event)| {
+                state.handle_event(event);
+                ok(state)
+            })
+            .await?;
+
+        Ok(EventSourcedEntity {
+            entity,
+            id,
+            last_seq_no: None,
+            event_log,
+            listener: self.listener,
+        })
+    }
+}
+
 /// An event-sourced entity.
-pub struct EventSourcedEntity<E>
+pub struct EventSourcedEntity<E, L>
 where
     E: Entity,
 {
     entity: E,
+    listener: Option<L>,
     id: E::Id,
-    last_seq_no: Option<NonZeroU64>,
     event_log: EventLog<E::Id>,
+    last_seq_no: Option<NonZeroU64>,
 }
 
-impl<E> EventSourcedEntity<E>
+impl<E, L> EventSourcedEntity<E, L>
 where
     E: Entity,
+    L: EventListener,
 {
     pub async fn handle_command(
         &mut self,
@@ -59,7 +102,13 @@ where
                 if !events.is_empty() {
                     let seq_no = self
                         .event_log
-                        .persist(&self.id, self.last_seq_no, E::TYPE_NAME, &events)
+                        .persist(
+                            &self.id,
+                            self.last_seq_no,
+                            E::TYPE_NAME,
+                            &events,
+                            &mut self.listener,
+                        )
                         .await?;
                     self.last_seq_no = Some(seq_no);
 
@@ -82,26 +131,12 @@ pub trait EventSourcedExt
 where
     Self: Entity + Sized,
 {
-    /// Load the [EventSourcedEntity] for this [Entity].
-    async fn load(
-        self,
-        id: Self::Id,
-        event_log: EventLog<Self::Id>,
-    ) -> Result<EventSourcedEntity<Self>, event_log::Error> {
-        let events = event_log.current_events_by_id::<Self::Event>(&id).await;
-        let entity = events
-            .try_fold(self, |mut state, (_, event)| {
-                state.handle_event(event);
-                ok(state)
-            })
-            .await?;
-
-        Ok(EventSourcedEntity {
-            entity,
-            id,
-            last_seq_no: None,
-            event_log,
-        })
+    /// Build an event-sourced [Entity].
+    fn entity(self) -> EventSourcedEntityBuilder<Self, NoEventListener> {
+        EventSourcedEntityBuilder {
+            entity: self,
+            listener: None,
+        }
     }
 }
 
@@ -220,7 +255,11 @@ mod tests {
             .await
             .unwrap();
 
-        let counter = Counter::default().load(id, event_log).await.unwrap();
+        let counter = Counter::default()
+            .entity()
+            .build(id, event_log)
+            .await
+            .unwrap();
         assert_eq!(counter.entity.0, 42);
     }
 
@@ -249,7 +288,11 @@ mod tests {
 
         let id = Uuid::from_u128(0);
 
-        let mut counter = Counter::default().load(id, event_log).await.unwrap();
+        let mut counter = Counter::default()
+            .entity()
+            .build(id, event_log)
+            .await
+            .unwrap();
         assert_eq!(counter.entity, Counter(0));
 
         let result = counter.handle_command(Command::Decrease(1)).await.unwrap();
