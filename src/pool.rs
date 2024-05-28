@@ -70,13 +70,15 @@ mod tests {
     use testcontainers::{runners::AsyncRunner, RunnableImage};
     use testcontainers_modules::postgres::Postgres;
 
+    type TestResult = Result<(), Box<dyn StdError>>;
+
     #[tokio::test]
-    async fn test_pool() -> Result<(), Box<dyn StdError>> {
+    async fn test_pool() -> TestResult {
         let container = RunnableImage::from(Postgres::default())
             .with_tag("16-alpine")
             .start()
-            .await;
-        let pg_port = container.get_host_port_ipv4(5432).await;
+            .await?;
+        let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
             host: "localhost".to_string(),

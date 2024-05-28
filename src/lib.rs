@@ -306,9 +306,12 @@ mod tests {
     use error_ext::BoxError;
     use serde::{Deserialize, Serialize};
     use sqlx::{postgres::PgSslMode, Executor, Row, Transaction};
+    use std::error::Error as StdError;
     use testcontainers::{runners::AsyncRunner, RunnableImage};
     use testcontainers_modules::postgres::Postgres;
     use uuid::Uuid;
+
+    type TestResult = Result<(), Box<dyn StdError>>;
 
     #[derive(Debug, Default, PartialEq, Eq)]
     pub struct Counter(u64);
@@ -426,12 +429,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_load() {
+    async fn test_load() -> TestResult {
         let container = RunnableImage::from(Postgres::default())
             .with_tag("16-alpine")
             .start()
-            .await;
-        let pg_port = container.get_host_port_ipv4(5432).await;
+            .await?;
+        let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
             host: "localhost".to_string(),
@@ -474,15 +477,17 @@ mod tests {
 
         let counter = Counter::default().entity().build(id, pool).await.unwrap();
         assert_eq!(counter.entity.0, 42);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_handle_command() {
+    async fn test_handle_command() -> TestResult {
         let container = RunnableImage::from(Postgres::default())
             .with_tag("16-alpine")
             .start()
-            .await;
-        let pg_port = container.get_host_port_ipv4(5432).await;
+            .await?;
+        let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
             host: "localhost".to_string(),
@@ -511,15 +516,17 @@ mod tests {
         assert_eq!(result, Ok(&Counter(20)));
         let result = counter.handle_command(Increase(22)).await.unwrap();
         assert_eq!(result, Ok(&Counter(42)));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_event_listener() {
+    async fn test_event_listener() -> TestResult {
         let container = RunnableImage::from(Postgres::default())
             .with_tag("16-alpine")
             .start()
-            .await;
-        let pg_port = container.get_host_port_ipv4(5432).await;
+            .await?;
+        let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
             host: "localhost".to_string(),
@@ -587,5 +594,7 @@ mod tests {
             .unwrap()
             .map(|row| row.get::<i64, _>(0));
         assert_eq!(value, Some(2));
+
+        Ok(())
     }
 }
