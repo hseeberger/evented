@@ -24,7 +24,7 @@ trait-variant = { version = "0.1" }
 
 [dev-dependencies]
 sqlx                   = { version = "0.7", features = [ "uuid" ] }
-testcontainers         = { version = "0.16" }
-testcontainers-modules = { version = "0.4", features = [ "postgres" ] }
+testcontainers         = { version = "0.17" }
+testcontainers-modules = { version = "0.5", features = [ "postgres" ] }
 tokio                  = { version = "1", features = [ "macros" ] }
 uuid                   = { version = "1.8", features = [ "serde", "v7" ] }
