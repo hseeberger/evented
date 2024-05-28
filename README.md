@@ -8,7 +8,7 @@
 [license-badge]: https://img.shields.io/github/license/hseeberger/evented
 [license-url]: https://github.com/hseeberger/evented/blob/main/LICENSE
 
-evented is a library for [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) where state changes are persisted as events. It originated from [eventsourced](https://github.com/hseeberger/eventsourced), but offers additional strong consistency features by tighlty coupling to [PostgreSQL](https://www.postgresql.org/).
+evented is a library for [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) where state changes are persisted as events. It originated from [eventsourced](https://github.com/hseeberger/eventsourced), but offers additional strong consistency features by tightly coupling to [PostgreSQL](https://www.postgresql.org/).
 
 The core abstraction of evented is an `EventSourcedEntity` which can be identified via an ID: an `Entity` implementation defines its state and event handling and associated `Command` implementations define its command handling.
 
