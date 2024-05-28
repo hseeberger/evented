@@ -1,14 +1,14 @@
 [package]
-name          = "eventsourced-next"
+name          = "evented"
 version       = "0.0.1"
 edition       = "2021"
-description   = "eventsourced-next"
+description   = "Event Sourcing in Rust on top of PostgreSQL"
 authors       = [ "Heiko Seeberger <git@heikoseeberger.de>" ]
 license-file  = "LICENSE"
 readme        = "README.md"
-homepage      = "https://github.com/hseeberger/eventsourced-next"
-repository    = "https://github.com/hseeberger/eventsourced-next"
-documentation = "https://github.com/hseeberger/eventsourced-next"
+homepage      = "https://github.com/hseeberger/evented"
+repository    = "https://github.com/hseeberger/evented"
+documentation = "https://github.com/hseeberger/evented"
 
 [dependencies]
 error-ext     = { version = "0.2" }
