@@ -6,6 +6,7 @@ use futures::{future::ok, Stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, Encode, Postgres, Row, Transaction, Type};
 use std::{
+    collections::HashMap,
     fmt::{Debug, Display},
     num::NonZeroU64,
 };
@@ -26,7 +27,17 @@ pub trait Command {
         self,
         id: &<Self::Entity as Entity>::Id,
         entity: &Self::Entity,
-    ) -> Result<Vec<<Self::Entity as Entity>::Event>, Self::Rejection>;
+    ) -> Result<
+        Vec<
+            impl Into<
+                EventWithMetadata<
+                    <Self::Entity as Entity>::Event,
+                    <Self::Entity as Entity>::Metadata,
+                >,
+            >,
+        >,
+        Self::Rejection,
+    >;
 }
 
 /// State and event handling for an [EventSourcedEntity].
@@ -42,6 +53,9 @@ pub trait Entity {
 
     /// The type of events.
     type Event: Debug + Serialize + for<'de> Deserialize<'de> + Send + Sync;
+
+    /// Tye type of event metadata.
+    type Metadata: Debug + Serialize + for<'de> Deserialize<'de>;
 
     /// The type name.
     const TYPE_NAME: &'static str;
@@ -67,6 +81,18 @@ where
 }
 
 impl<E> EntityExt for E where E: Entity {}
+
+impl<E> From<E> for EventWithMetadata<E, HashMap<(), ()>> {
+    fn from(value: E) -> Self {
+        todo!()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EventWithMetadata<E, M> {
+    event: E,
+    metadata: M,
+}
 
 /// Builder for an [EventSourcedEntity].
 pub struct EventSourcedEntityBuilder<E, L> {
@@ -129,7 +155,13 @@ where
     where
         C: Command<Entity = E>,
     {
-        match command.handle(&self.id, &self.entity).await {
+        let result = command.handle(&self.id, &self.entity).await.map(|events| {
+            events
+                .into_iter()
+                .map(|event| event.into())
+                .collect::<Vec<_>>()
+        });
+        match result {
             Ok(events) => {
                 if !events.is_empty() {
                     let seq_no = persist::<E, _>(
@@ -143,7 +175,7 @@ where
                     self.last_seq_no = Some(seq_no);
 
                     for event in events {
-                        self.entity.handle_event(event);
+                        self.entity.handle_event(event.event);
                     }
                 }
 
@@ -231,7 +263,7 @@ where
 async fn persist<E, L>(
     id: &E::Id,
     last_seq_no: Option<NonZeroU64>,
-    events: &[E::Event],
+    events: &[EventWithMetadata<E::Event, E::Metadata>],
     pool: &Pool,
     listener: &mut Option<L>,
 ) -> Result<NonZeroU64, Error>
@@ -272,7 +304,7 @@ where
 
         if let Some(listener) = listener {
             listener
-                .listen(event, &mut tx)
+                .listen(&event.event, &mut tx)
                 .await
                 .map_err(Error::Listener)?;
         }
