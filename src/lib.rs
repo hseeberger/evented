@@ -55,7 +55,7 @@ pub trait Entity {
     type Event: Debug + Serialize + for<'de> Deserialize<'de> + Sync;
 
     /// Tye type of event metadata.
-    type Metadata: Debug + Serialize + for<'de> Deserialize<'de> + Sync;
+    type Metadata: Debug + Serialize + Sync;
 
     /// The type name.
     const TYPE_NAME: &'static str;
