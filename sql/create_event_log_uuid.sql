@@ -4,5 +4,6 @@ CREATE TABLE
     seq_no bigint,
     type text,
     event bytea,
+    metadata jsonb,
     PRIMARY KEY (id, seq_no)
   );
