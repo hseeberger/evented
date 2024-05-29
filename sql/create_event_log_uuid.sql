@@ -1,9 +1,10 @@
 CREATE TABLE
   IF NOT EXISTS event (
-    id uuid,
-    seq_no bigint,
-    type text,
-    event bytea,
-    metadata jsonb,
-    PRIMARY KEY (id, seq_no)
+    seq_no bigserial PRIMARY KEY,
+    entity_id uuid NOT NULL,
+    version bigint NOT NULL,
+    type text NOT NULL,
+    event bytea NOT NULL,
+    metadata jsonb NOT NULL,
+    UNIQUE (entity_id, version)
   );

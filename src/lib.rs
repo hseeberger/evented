@@ -145,7 +145,7 @@ where
         Ok(EventSourcedEntity {
             entity,
             id,
-            last_seq_no: None,
+            last_version: None,
             pool,
             listener: self.listener,
         })
@@ -161,7 +161,7 @@ where
     listener: Option<L>,
     id: E::Id,
     pool: Pool,
-    last_seq_no: Option<NonZeroU64>,
+    last_version: Option<NonZeroU64>,
 }
 
 impl<E, L> EventSourcedEntity<E, L>
@@ -183,15 +183,15 @@ where
         match result {
             Ok(ewms) => {
                 if !ewms.is_empty() {
-                    let seq_no = persist::<E, _>(
+                    let version = persist::<E, _>(
                         &self.id,
-                        self.last_seq_no,
+                        self.last_version,
                         &ewms,
                         &self.pool,
                         &mut self.listener,
                     )
                     .await?;
-                    self.last_seq_no = Some(seq_no);
+                    self.last_version = Some(version);
 
                     for EventWithMetadata { event, .. } in ewms {
                         self.entity.handle_event(event);
@@ -264,18 +264,18 @@ async fn current_events_by_id<'i, E>(
 where
     E: Entity,
 {
-    sqlx::query("SELECT seq_no, event FROM event WHERE id = $1")
+    sqlx::query("SELECT version, event FROM event WHERE entity_id = $1")
         .bind(id)
         .fetch(&**pool)
         .map_err(|error| Error::Sqlx("cannot get next event".to_string(), error))
         .map(|row| {
             row.and_then(|row| {
-                let seq_no = (row.get::<i64, _>(0) as u64)
+                let version = (row.get::<i64, _>(0) as u64)
                     .try_into()
                     .expect("sequence number greater zero");
                 let bytes = row.get::<&[u8], _>(1);
                 let event = serde_json::from_slice::<E::Event>(bytes).map_err(Error::De)?;
-                Ok((seq_no, event))
+                Ok((version, event))
             })
         })
 }
@@ -283,7 +283,7 @@ where
 #[instrument(skip(ewms, listener))]
 async fn persist<E, L>(
     id: &E::Id,
-    last_seq_no: Option<NonZeroU64>,
+    last_version: Option<NonZeroU64>,
     ewms: &[EventWithMetadata<E::Event, E::Metadata>],
     pool: &Pool,
     listener: &mut Option<L>,
@@ -299,25 +299,25 @@ where
         .await
         .map_err(|error| Error::Sqlx("cannot begin transaction".to_string(), error))?;
 
-    let seq_no = sqlx::query("SELECT MAX(seq_no) FROM event WHERE id = $1")
+    let version = sqlx::query("SELECT MAX(version) FROM event WHERE entity_id = $1")
         .bind(id)
         .fetch_one(&mut *tx)
         .await
-        .map_err(|error| Error::Sqlx("cannot select max seq_no".to_string(), error))
-        .map(into_seq_no)?;
+        .map_err(|error| Error::Sqlx("cannot select max version".to_string(), error))
+        .map(into_version)?;
 
-    if seq_no != last_seq_no {
-        return Err(Error::UnexpectedSeqNo(seq_no, last_seq_no));
+    if version != last_version {
+        return Err(Error::UnexpectedSeqNo(version, last_version));
     }
 
-    let mut seq_no = last_seq_no.map(|n| n.get() as i64).unwrap_or_default();
+    let mut version = last_version.map(|n| n.get() as i64).unwrap_or_default();
     for ewm @ EventWithMetadata { event, metadata } in ewms.iter() {
-        seq_no += 1;
+        version += 1;
         let bytes = serde_json::to_vec(event).map_err(Error::Ser)?;
         let metadata = serde_json::to_value(metadata).map_err(Error::Ser)?;
-        sqlx::query("INSERT INTO event VALUES ($1, $2, $3, $4, $5)")
+        sqlx::query("INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)")
             .bind(id)
-            .bind(seq_no)
+            .bind(version)
             .bind(E::TYPE_NAME)
             .bind(&bytes)
             .bind(metadata)
@@ -337,16 +337,16 @@ where
         .await
         .map_err(|error| Error::Sqlx("cannot commit transaction".to_string(), error))?;
 
-    let seq_no = (seq_no as u64)
+    let version = (version as u64)
         .try_into()
         .expect("sequence number greater zero");
-    Ok(seq_no)
+    Ok(version)
 }
 
-fn into_seq_no(row: PgRow) -> Option<NonZeroU64> {
-    // If there is no seq_no there is one row with a NULL column, hence use `try_get`.
-    row.try_get::<i64, _>(0).ok().map(|seq_no| {
-        (seq_no as u64)
+fn into_version(row: PgRow) -> Option<NonZeroU64> {
+    // If there is no version there is one row with a NULL column, hence use `try_get`.
+    row.try_get::<i64, _>(0).ok().map(|version| {
+        (version as u64)
             .try_into()
             .expect("sequence number greater zero")
     })
@@ -360,6 +360,7 @@ mod tests {
     };
     use error_ext::BoxError;
     use serde::{Deserialize, Serialize};
+    use serde_json::Value;
     use sqlx::{postgres::PgSslMode, Executor, Row, Transaction};
     use std::error::Error as StdError;
     use testcontainers::{runners::AsyncRunner, RunnableImage};
@@ -543,30 +544,39 @@ mod tests {
         (&*pool).execute(ddl).await.unwrap();
 
         let id = Uuid::from_u128(0);
-        sqlx::query("INSERT INTO event VALUES ($1, $2, $3, $4)")
-            .bind(&id)
-            .bind(1_i64)
-            .bind("type")
-            .bind(serde_json::to_vec(&Event::Increased { id, inc: 40 }).unwrap())
-            .execute(&*pool)
-            .await
-            .unwrap();
-        sqlx::query("INSERT INTO event VALUES ($1, $2, $3, $4)")
-            .bind(&id)
-            .bind(2_i64)
-            .bind("type")
-            .bind(serde_json::to_vec(&Event::Decreased { id, dec: 20 }).unwrap())
-            .execute(&*pool)
-            .await
-            .unwrap();
-        sqlx::query("INSERT INTO event VALUES ($1, $2, $3, $4)")
-            .bind(&id)
-            .bind(3_i64)
-            .bind("type")
-            .bind(serde_json::to_vec(&Event::Increased { id, inc: 22 }).unwrap())
-            .execute(&*pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(&id)
+        .bind(1_i64)
+        .bind("type")
+        .bind(serde_json::to_vec(&Event::Increased { id, inc: 40 }).unwrap())
+        .bind(Value::Null)
+        .execute(&*pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(&id)
+        .bind(2_i64)
+        .bind("type")
+        .bind(serde_json::to_vec(&Event::Decreased { id, dec: 20 }).unwrap())
+        .bind(Value::Null)
+        .execute(&*pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(&id)
+        .bind(3_i64)
+        .bind("type")
+        .bind(serde_json::to_vec(&Event::Increased { id, inc: 22 }).unwrap())
+        .bind(Value::Null)
+        .execute(&*pool)
+        .await
+        .unwrap();
 
         let counter = Counter::default().entity().build(id, pool).await.unwrap();
         assert_eq!(counter.entity.0, 42);
