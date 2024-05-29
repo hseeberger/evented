@@ -21,12 +21,23 @@ pub trait Command {
     /// The type for rejecting this command.
     type Rejection: Debug;
 
-    /// The command handler, returning either to be persisted and applied events or a rejection.
+    /// The command handler, returning either to be persisted and applied events and metadata or a
+    /// rejection.
     async fn handle(
         self,
         id: &<Self::Entity as Entity>::Id,
         entity: &Self::Entity,
-    ) -> Result<Vec<<Self::Entity as Entity>::Event>, Self::Rejection>;
+    ) -> Result<
+        Vec<
+            impl Into<
+                EventWithMetadata<
+                    <Self::Entity as Entity>::Event,
+                    <Self::Entity as Entity>::Metadata,
+                >,
+            >,
+        >,
+        Self::Rejection,
+    >;
 }
 
 /// State and event handling for an [EventSourcedEntity].
@@ -41,7 +52,10 @@ pub trait Entity {
         + Sync;
 
     /// The type of events.
-    type Event: Debug + Serialize + for<'de> Deserialize<'de> + Send + Sync;
+    type Event: Debug + Serialize + for<'de> Deserialize<'de> + Sync;
+
+    /// Tye type of event metadata.
+    type Metadata: Debug + Serialize + Sync;
 
     /// The type name.
     const TYPE_NAME: &'static str;
@@ -67,6 +81,38 @@ where
 }
 
 impl<E> EntityExt for E where E: Entity {}
+
+/// An event with metadata, as returned by the command handler.
+#[derive(Debug)]
+pub struct EventWithMetadata<E, M> {
+    event: E,
+    metadata: M,
+}
+
+impl<E> From<E> for EventWithMetadata<E, ()> {
+    fn from(event: E) -> Self {
+        EventWithMetadata {
+            event,
+            metadata: (),
+        }
+    }
+}
+
+/// Extension methods for events.
+pub trait EventExt
+where
+    Self: Sized,
+{
+    /// Convert a plain event into an [EventWithMetadata].
+    fn with_metadata<M>(self, metadata: M) -> EventWithMetadata<Self, M> {
+        EventWithMetadata {
+            event: self,
+            metadata,
+        }
+    }
+}
+
+impl<E> EventExt for E {}
 
 /// Builder for an [EventSourcedEntity].
 pub struct EventSourcedEntityBuilder<E, L> {
@@ -121,7 +167,7 @@ where
 impl<E, L> EventSourcedEntity<E, L>
 where
     E: Entity,
-    L: EventListener<E::Event>,
+    L: EventListener<E::Event, E::Metadata>,
 {
     /// Handle the given command and transactionally persist all events returned from the command
     /// handler if not rejected.
@@ -129,20 +175,25 @@ where
     where
         C: Command<Entity = E>,
     {
-        match command.handle(&self.id, &self.entity).await {
-            Ok(events) => {
-                if !events.is_empty() {
+        let result = command.handle(&self.id, &self.entity).await.map(|es| {
+            es.into_iter()
+                .map(|into_ewm| into_ewm.into())
+                .collect::<Vec<_>>()
+        });
+        match result {
+            Ok(ewms) => {
+                if !ewms.is_empty() {
                     let seq_no = persist::<E, _>(
                         &self.id,
                         self.last_seq_no,
-                        &events,
+                        &ewms,
                         &self.pool,
                         &mut self.listener,
                     )
                     .await?;
                     self.last_seq_no = Some(seq_no);
 
-                    for event in events {
+                    for EventWithMetadata { event, .. } in ewms {
                         self.entity.handle_event(event);
                     }
                 }
@@ -158,27 +209,29 @@ where
 /// Invoked for each event during the transaction persisting the events returned from the command
 /// handler.
 #[trait_variant::make(Send)]
-pub trait EventListener<E> {
+pub trait EventListener<E, M> {
     async fn listen(
         &mut self,
-        event: &E,
+        ewm: &EventWithMetadata<E, M>,
         tx: &mut Transaction<'_, Postgres>,
     ) -> Result<(), BoxError>
     where
-        E: Sync;
+        E: Sync,
+        M: Sync;
 }
 
 /// A no-op [EventListener].
 pub struct NoOpEventListener;
 
-impl<E> EventListener<E> for NoOpEventListener {
+impl<E, M> EventListener<E, M> for NoOpEventListener {
     async fn listen(
         &mut self,
-        _event: &E,
+        _ewm: &EventWithMetadata<E, M>,
         _tx: &mut Transaction<'_, Postgres>,
     ) -> Result<(), BoxError>
     where
         E: Sync,
+        M: Sync,
     {
         Ok(())
     }
@@ -227,19 +280,19 @@ where
         })
 }
 
-#[instrument(skip(events, listener))]
+#[instrument(skip(ewms, listener))]
 async fn persist<E, L>(
     id: &E::Id,
     last_seq_no: Option<NonZeroU64>,
-    events: &[E::Event],
+    ewms: &[EventWithMetadata<E::Event, E::Metadata>],
     pool: &Pool,
     listener: &mut Option<L>,
 ) -> Result<NonZeroU64, Error>
 where
     E: Entity,
-    L: EventListener<E::Event>,
+    L: EventListener<E::Event, E::Metadata>,
 {
-    assert!(!events.is_empty());
+    assert!(!ewms.is_empty());
 
     let mut tx = pool
         .begin()
@@ -258,21 +311,23 @@ where
     }
 
     let mut seq_no = last_seq_no.map(|n| n.get() as i64).unwrap_or_default();
-    for event in events.iter() {
+    for ewm @ EventWithMetadata { event, metadata } in ewms.iter() {
         seq_no += 1;
         let bytes = serde_json::to_vec(event).map_err(Error::Ser)?;
-        sqlx::query("INSERT INTO event VALUES ($1, $2, $3, $4)")
+        let metadata = serde_json::to_value(metadata).map_err(Error::Ser)?;
+        sqlx::query("INSERT INTO event VALUES ($1, $2, $3, $4, $5)")
             .bind(id)
             .bind(seq_no)
             .bind(E::TYPE_NAME)
             .bind(&bytes)
+            .bind(metadata)
             .execute(&mut *tx)
             .await
             .map_err(|error| Error::Sqlx("cannot execute statement".to_string(), error))?;
 
         if let Some(listener) = listener {
             listener
-                .listen(event, &mut tx)
+                .listen(ewm, &mut tx)
                 .await
                 .map_err(Error::Listener)?;
         }
@@ -301,7 +356,7 @@ fn into_seq_no(row: PgRow) -> Option<NonZeroU64> {
 mod tests {
     use crate::{
         pool::{Config, Pool},
-        Command, Entity, EntityExt, EventListener,
+        Command, Entity, EntityExt, EventExt, EventListener, EventWithMetadata,
     };
     use error_ext::BoxError;
     use serde::{Deserialize, Serialize};
@@ -309,6 +364,7 @@ mod tests {
     use std::error::Error as StdError;
     use testcontainers::{runners::AsyncRunner, RunnableImage};
     use testcontainers_modules::postgres::Postgres;
+    use time::OffsetDateTime;
     use uuid::Uuid;
 
     type TestResult = Result<(), Box<dyn StdError>>;
@@ -319,6 +375,7 @@ mod tests {
     impl Entity for Counter {
         type Id = Uuid;
         type Event = Event;
+        type Metadata = Metadata;
 
         const TYPE_NAME: &'static str = "counter";
 
@@ -347,12 +404,26 @@ mod tests {
             self,
             id: &<Self::Entity as Entity>::Id,
             entity: &Self::Entity,
-        ) -> Result<Vec<<Self::Entity as Entity>::Event>, Self::Rejection> {
+        ) -> Result<
+            Vec<
+                impl Into<
+                    EventWithMetadata<
+                        <Self::Entity as Entity>::Event,
+                        <Self::Entity as Entity>::Metadata,
+                    >,
+                >,
+            >,
+            Self::Rejection,
+        > {
             let Increase(inc) = self;
             if entity.0 > u64::MAX - inc {
                 Err(Overflow)
             } else {
-                Ok(vec![Event::Increased { id: *id, inc }])
+                let increased = Event::Increased { id: *id, inc };
+                let metadata = Metadata {
+                    timestamp: OffsetDateTime::now_utc(),
+                };
+                Ok(vec![increased.with_metadata(metadata)])
             }
         }
     }
@@ -371,12 +442,26 @@ mod tests {
             self,
             id: &<Self::Entity as Entity>::Id,
             entity: &Self::Entity,
-        ) -> Result<Vec<<Self::Entity as Entity>::Event>, Self::Rejection> {
+        ) -> Result<
+            Vec<
+                impl Into<
+                    EventWithMetadata<
+                        <Self::Entity as Entity>::Event,
+                        <Self::Entity as Entity>::Metadata,
+                    >,
+                >,
+            >,
+            Self::Rejection,
+        > {
             let Decrease(dec) = self;
             if entity.0 < dec {
-                Err(Underflow)
+                Err::<Vec<_>, Underflow>(Underflow)
             } else {
-                Ok(vec![Event::Decreased { id: *id, dec }])
+                let decreased = Event::Decreased { id: *id, dec };
+                let metadata = Metadata {
+                    timestamp: OffsetDateTime::now_utc(),
+                };
+                Ok(vec![decreased.with_metadata(metadata)])
             }
         }
     }
@@ -384,16 +469,24 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     pub struct Underflow;
 
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Metadata {
+        timestamp: OffsetDateTime,
+    }
+
     struct Listener;
 
-    impl EventListener<Event> for Listener {
+    impl EventListener<Event, Metadata> for Listener {
         async fn listen(
             &mut self,
-            event: &Event,
+            ewm: &EventWithMetadata<Event, Metadata>,
             tx: &mut Transaction<'_, sqlx::Postgres>,
         ) -> Result<(), BoxError> {
-            match event {
-                Event::Increased { id, inc } => {
+            match ewm {
+                EventWithMetadata {
+                    event: Event::Increased { id, inc },
+                    ..
+                } => {
                     let value = sqlx::query("SELECT value FROM counters WHERE id = $1")
                         .bind(id)
                         .fetch_optional(&mut **tx)

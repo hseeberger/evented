@@ -26,5 +26,6 @@ trait-variant = { version = "0.1" }
 sqlx                   = { version = "0.7", features = [ "uuid" ] }
 testcontainers         = { version = "0.17" }
 testcontainers-modules = { version = "0.5", features = [ "postgres" ] }
+time                   = { version = "0.3", features = [ "serde-human-readable" ] }
 tokio                  = { version = "1", features = [ "macros" ] }
 uuid                   = { version = "1.8", features = [ "serde", "v7" ] }
