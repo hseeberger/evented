@@ -247,8 +247,8 @@ pub enum Error {
     #[error("cannot deserialize event")]
     De(#[source] serde_json::Error),
 
-    #[error("expected sequence number {0:?}, but was {1:?}")]
-    UnexpectedSeqNo(Option<NonZeroU64>, Option<NonZeroU64>),
+    #[error("expected version {0:?}, but was {1:?}")]
+    UnexpectedVersion(Option<NonZeroU64>, Option<NonZeroU64>),
 
     #[error("listener error")]
     Listener(#[source] BoxError),
@@ -270,7 +270,7 @@ where
             row.and_then(|row| {
                 let version = (row.get::<i64, _>(0) as u64)
                     .try_into()
-                    .expect("sequence number greater zero");
+                    .expect("version greater zero");
                 let bytes = row.get::<&[u8], _>(1);
                 let event = serde_json::from_slice::<E::Event>(bytes).map_err(Error::De)?;
                 Ok((version, event))
@@ -305,7 +305,7 @@ where
         .map(into_version)?;
 
     if version != last_version {
-        return Err(Error::UnexpectedSeqNo(version, last_version));
+        return Err(Error::UnexpectedVersion(version, last_version));
     }
 
     let mut version = last_version.map(|n| n.get() as i64).unwrap_or_default();
@@ -335,19 +335,15 @@ where
         .await
         .map_err(|error| Error::Sqlx("cannot commit transaction".to_string(), error))?;
 
-    let version = (version as u64)
-        .try_into()
-        .expect("sequence number greater zero");
+    let version = (version as u64).try_into().expect("version greater zero");
     Ok(version)
 }
 
 fn into_version(row: PgRow) -> Option<NonZeroU64> {
     // If there is no version there is one row with a NULL column, hence use `try_get`.
-    row.try_get::<i64, _>(0).ok().map(|version| {
-        (version as u64)
-            .try_into()
-            .expect("sequence number greater zero")
-    })
+    row.try_get::<i64, _>(0)
+        .ok()
+        .map(|version| (version as u64).try_into().expect("version greater zero"))
 }
 
 #[cfg(test)]
