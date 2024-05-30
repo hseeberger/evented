@@ -264,7 +264,7 @@ async fn current_events_by_id<'i, E>(
 where
     E: Entity,
 {
-    sqlx::query("SELECT version, event FROM event WHERE entity_id = $1")
+    sqlx::query("SELECT version, event FROM event WHERE entity_id = $1 ORDER BY seq_no ASC")
         .bind(id)
         .fetch(&**pool)
         .map_err(|error| Error::Sqlx("cannot get next event".to_string(), error))
