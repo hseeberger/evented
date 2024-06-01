@@ -2,6 +2,7 @@ use crate::pool::Pool;
 use error_ext::BoxError;
 use futures::{future::ok, Stream, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::{postgres::PgRow, Encode, Postgres, Row, Transaction, Type};
 use std::{
     fmt::{Debug, Display},
@@ -255,27 +256,32 @@ pub enum Error {
 }
 
 #[instrument(skip(pool))]
-async fn current_events_by_id<'i, E>(
-    id: &'i E::Id,
-    pool: &Pool,
-) -> impl Stream<Item = Result<(NonZeroU64, E::Event), Error>> + Send + 'i
+async fn current_events_by_id<'a, E>(
+    id: &'a E::Id,
+    pool: &'a Pool,
+) -> impl Stream<Item = Result<(NonZeroU64, E::Event), Error>> + Send + 'a
 where
     E: Entity,
 {
-    sqlx::query("SELECT version, event FROM event WHERE entity_id = $1 ORDER BY seq_no ASC")
-        .bind(id)
-        .fetch(&**pool)
-        .map_err(|error| Error::Sqlx("cannot get next event".to_string(), error))
-        .map(|row| {
-            row.and_then(|row| {
-                let version = (row.get::<i64, _>(0) as u64)
-                    .try_into()
-                    .expect("version greater zero");
-                let bytes = row.get::<&[u8], _>(1);
-                let event = serde_json::from_slice::<E::Event>(bytes).map_err(Error::De)?;
-                Ok((version, event))
-            })
+    sqlx::query(
+        "SELECT version, event
+         FROM event
+         WHERE entity_id = $1
+         ORDER BY seq_no ASC",
+    )
+    .bind(id)
+    .fetch(&**pool)
+    .map_err(|error| Error::Sqlx("cannot get next event".to_string(), error))
+    .map(|row| {
+        row.and_then(|row| {
+            let version = (row.get::<i64, _>(0) as u64)
+                .try_into()
+                .expect("version greater zero");
+            let value = row.get::<Value, _>(1);
+            let event = serde_json::from_value::<E::Event>(value).map_err(Error::De)?;
+            Ok((version, event))
         })
+    })
 }
 
 #[instrument(skip(ewms, listener))]
@@ -297,12 +303,16 @@ where
         .await
         .map_err(|error| Error::Sqlx("cannot begin transaction".to_string(), error))?;
 
-    let version = sqlx::query("SELECT MAX(version) FROM event WHERE entity_id = $1")
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|error| Error::Sqlx("cannot select max version".to_string(), error))
-        .map(into_version)?;
+    let version = sqlx::query(
+        "SELECT MAX(version)
+         FROM event
+         WHERE entity_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| Error::Sqlx("cannot select max version".to_string(), error))
+    .map(into_version)?;
 
     if version != last_version {
         return Err(Error::UnexpectedVersion(version, last_version));
@@ -311,17 +321,20 @@ where
     let mut version = last_version.map(|n| n.get() as i64).unwrap_or_default();
     for ewm @ EventWithMetadata { event, metadata } in ewms.iter() {
         version += 1;
-        let bytes = serde_json::to_vec(event).map_err(Error::Ser)?;
+        let bytes = serde_json::to_value(event).map_err(Error::Ser)?;
         let metadata = serde_json::to_value(metadata).map_err(Error::Ser)?;
-        sqlx::query("INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)")
-            .bind(id)
-            .bind(version)
-            .bind(E::TYPE_NAME)
-            .bind(&bytes)
-            .bind(metadata)
-            .execute(&mut *tx)
-            .await
-            .map_err(|error| Error::Sqlx("cannot execute statement".to_string(), error))?;
+        sqlx::query(
+            "INSERT INTO event (entity_id, version, type_name, event, metadata)
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(id)
+        .bind(version)
+        .bind(E::TYPE_NAME)
+        .bind(&bytes)
+        .bind(metadata)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| Error::Sqlx("cannot execute statement".to_string(), error))?;
 
         if let Some(listener) = listener {
             listener
@@ -482,30 +495,41 @@ mod tests {
                     event: Event::Increased { id, inc },
                     ..
                 } => {
-                    let value = sqlx::query("SELECT value FROM counters WHERE id = $1")
-                        .bind(id)
-                        .fetch_optional(&mut **tx)
-                        .await
-                        .map_err(Box::new)?
-                        .map(|row| row.try_get::<i64, _>(0))
-                        .transpose()?;
+                    let value = sqlx::query(
+                        "SELECT value
+                         FROM counters
+                         WHERE id = $1",
+                    )
+                    .bind(id)
+                    .fetch_optional(&mut **tx)
+                    .await
+                    .map_err(Box::new)?
+                    .map(|row| row.try_get::<i64, _>(0))
+                    .transpose()?;
                     match value {
                         Some(value) => {
-                            sqlx::query("UPDATE counters SET value = $1 WHERE id = $2")
-                                .bind(value + *inc as i64)
-                                .bind(id)
-                                .execute(&mut **tx)
-                                .await
-                                .map_err(Box::new)?;
+                            sqlx::query(
+                                "UPDATE counters
+                                         SET value = $1
+                                         WHERE id = $2",
+                            )
+                            .bind(value + *inc as i64)
+                            .bind(id)
+                            .execute(&mut **tx)
+                            .await
+                            .map_err(Box::new)?;
                         }
 
                         None => {
-                            sqlx::query("INSERT INTO counters VALUES ($1, $2)")
-                                .bind(id)
-                                .bind(*inc as i64)
-                                .execute(&mut **tx)
-                                .await
-                                .map_err(Box::new)?;
+                            sqlx::query(
+                                "INSERT INTO counters
+                                 VALUES ($1, $2)",
+                            )
+                            .bind(id)
+                            .bind(*inc as i64)
+                            .execute(&mut **tx)
+                            .await
+                            .map_err(Box::new)?;
                         }
                     }
                     Ok(())
@@ -533,46 +557,46 @@ mod tests {
             sslmode: PgSslMode::Prefer,
         };
 
-        let pool = Pool::new(config).await.expect("pool can be created");
+        let pool = Pool::new(config).await?;
         let ddl = include_str!("../sql/create_event_log_uuid.sql");
-        (&*pool).execute(ddl).await.unwrap();
+        (&*pool).execute(ddl).await?;
 
         let id = Uuid::from_u128(0);
         sqlx::query(
-            "INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO event (entity_id, version, type_name, event, metadata)
+             VALUES ($1, $2, $3, $4, $5)",
         )
         .bind(&id)
         .bind(1_i64)
-        .bind("type")
-        .bind(serde_json::to_vec(&Event::Increased { id, inc: 40 }).unwrap())
+        .bind("test")
+        .bind(serde_json::to_value(&Event::Increased { id, inc: 40 })?)
         .bind(Value::Null)
         .execute(&*pool)
-        .await
-        .unwrap();
+        .await?;
         sqlx::query(
-            "INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO event (entity_id, version, type_name, event, metadata)
+             VALUES ($1, $2, $3, $4, $5)",
         )
         .bind(&id)
         .bind(2_i64)
-        .bind("type")
-        .bind(serde_json::to_vec(&Event::Decreased { id, dec: 20 }).unwrap())
+        .bind("test")
+        .bind(serde_json::to_value(&Event::Decreased { id, dec: 20 })?)
         .bind(Value::Null)
         .execute(&*pool)
-        .await
-        .unwrap();
+        .await?;
         sqlx::query(
-            "INSERT INTO event (entity_id, version, type, event, metadata) VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO event (entity_id, version, type_name, event, metadata)
+             VALUES ($1, $2, $3, $4, $5)",
         )
         .bind(&id)
         .bind(3_i64)
-        .bind("type")
-        .bind(serde_json::to_vec(&Event::Increased { id, inc: 22 }).unwrap())
+        .bind("test")
+        .bind(serde_json::to_value(&Event::Increased { id, inc: 22 })?)
         .bind(Value::Null)
         .execute(&*pool)
-        .await
-        .unwrap();
+        .await?;
 
-        let counter = Counter::default().entity().build(id, pool).await.unwrap();
+        let counter = Counter::default().entity().build(id, pool).await?;
         assert_eq!(counter.entity.0, 42);
 
         Ok(())
@@ -597,21 +621,21 @@ mod tests {
 
         let pool = Pool::new(config).await.expect("pool can be created");
         let ddl = include_str!("../sql/create_event_log_uuid.sql");
-        (&*pool).execute(ddl).await.unwrap();
+        (&*pool).execute(ddl).await?;
 
         let id = Uuid::from_u128(0);
 
-        let mut counter = Counter::default().entity().build(id, pool).await.unwrap();
+        let mut counter = Counter::default().entity().build(id, pool).await?;
         assert_eq!(counter.entity, Counter(0));
 
-        let result = counter.handle_command(Decrease(1)).await.unwrap();
+        let result = counter.handle_command(Decrease(1)).await?;
         assert_eq!(result, Err(Underflow));
 
-        let result = counter.handle_command(Increase(40)).await.unwrap();
+        let result = counter.handle_command(Increase(40)).await?;
         assert_eq!(result, Ok(&Counter(40)));
-        let result = counter.handle_command(Decrease(20)).await.unwrap();
+        let result = counter.handle_command(Decrease(20)).await?;
         assert_eq!(result, Ok(&Counter(20)));
-        let result = counter.handle_command(Increase(22)).await.unwrap();
+        let result = counter.handle_command(Increase(22)).await?;
         assert_eq!(result, Ok(&Counter(42)));
 
         Ok(())
@@ -636,10 +660,12 @@ mod tests {
 
         let pool = Pool::new(config).await.expect("pool can be created");
         let ddl = include_str!("../sql/create_event_log_uuid.sql");
-        (&*pool).execute(ddl).await.unwrap();
+        (&*pool).execute(ddl).await?;
 
-        let ddl = "CREATE TABLE IF NOT EXISTS counters (id uuid, value bigint, PRIMARY KEY (id));";
-        (&*pool).execute(ddl).await.unwrap();
+        let ddl = "CREATE TABLE
+                   IF NOT EXISTS
+                   counters (id uuid, value bigint, PRIMARY KEY (id));";
+        (&*pool).execute(ddl).await?;
 
         let id_0 = Uuid::from_u128(0);
         let id_1 = Uuid::from_u128(1);
@@ -649,47 +675,53 @@ mod tests {
             .entity()
             .with_listener(Listener)
             .build(id_0, pool.clone())
-            .await
-            .unwrap();
+            .await?;
         let mut counter_1 = Counter::default()
             .entity()
             .with_listener(Listener)
             .build(id_1, pool.clone())
-            .await
-            .unwrap();
+            .await?;
         let mut counter_2 = Counter::default()
             .entity()
             .with_listener(Listener)
             .build(id_2, pool.clone())
-            .await
-            .unwrap();
+            .await?;
 
-        let _ = counter_1.handle_command(Increase(1)).await.unwrap();
-        let _ = counter_2.handle_command(Increase(1)).await.unwrap();
-        let _ = counter_2.handle_command(Increase(1)).await.unwrap();
+        let _ = counter_1.handle_command(Increase(1)).await?;
+        let _ = counter_2.handle_command(Increase(1)).await?;
+        let _ = counter_2.handle_command(Increase(1)).await?;
 
-        let value = sqlx::query("SELECT value FROM counters WHERE id = $1")
-            .bind(id_0)
-            .fetch_optional(&*pool)
-            .await
-            .unwrap()
-            .map(|row| row.get::<i64, _>(0));
+        let value = sqlx::query(
+            "SELECT value
+             FROM counters
+             WHERE id = $1",
+        )
+        .bind(id_0)
+        .fetch_optional(&*pool)
+        .await?
+        .map(|row| row.get::<i64, _>(0));
         assert!(value.is_none());
 
-        let value = sqlx::query("SELECT value FROM counters WHERE id = $1")
-            .bind(id_1)
-            .fetch_optional(&*pool)
-            .await
-            .unwrap()
-            .map(|row| row.get::<i64, _>(0));
+        let value = sqlx::query(
+            "SELECT value
+             FROM counters
+             WHERE id = $1",
+        )
+        .bind(id_1)
+        .fetch_optional(&*pool)
+        .await?
+        .map(|row| row.get::<i64, _>(0));
         assert_eq!(value, Some(1));
 
-        let value = sqlx::query("SELECT value FROM counters WHERE id = $1")
-            .bind(id_2)
-            .fetch_optional(&*pool)
-            .await
-            .unwrap()
-            .map(|row| row.get::<i64, _>(0));
+        let value = sqlx::query(
+            "SELECT value
+             FROM counters
+             WHERE id = $1",
+        )
+        .bind(id_2)
+        .fetch_optional(&*pool)
+        .await?
+        .map(|row| row.get::<i64, _>(0));
         assert_eq!(value, Some(2));
 
         Ok(())
