@@ -11,6 +11,7 @@ repository    = "https://github.com/hseeberger/evented"
 documentation = "https://github.com/hseeberger/evented"
 
 [dependencies]
+async-stream  = { version = "0.3" }
 error-ext     = { version = "0.2" }
 futures       = { version = "0.3" }
 secrecy       = { version = "0.8", features = [ "serde" ] }
@@ -19,13 +20,16 @@ serde_json    = { version = "1.0" }
 serde_with    = { version = "3.8" }
 sqlx          = { version = "0.7", features = [ "postgres", "runtime-tokio" ] }
 thiserror     = { version = "1.0" }
+tokio         = { version = "1", features = [ "sync" ] }
 tracing       = { version = "0.1" }
 trait-variant = { version = "0.1" }
 
 [dev-dependencies]
+assert_matches         = { version = "1.5" }
 sqlx                   = { version = "0.7", features = [ "uuid" ] }
 testcontainers         = { version = "0.17" }
 testcontainers-modules = { version = "0.5", features = [ "postgres" ] }
 time                   = { version = "0.3", features = [ "serde-human-readable" ] }
 tokio                  = { version = "1", features = [ "macros" ] }
+tracing-test           = { version = "0.2" }
 uuid                   = { version = "1.8", features = [ "serde", "v7" ] }
