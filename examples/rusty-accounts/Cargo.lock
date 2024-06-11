@@ -108,12 +108,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "220a2c618ab466efe41d0eace94dfeff1c35e3aa47891bdb95e1c0fefffd3c99"
 
 [[package]]
-name = "assert_matches"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
-
-[[package]]
 name = "async-stream"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -751,30 +745,6 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "evented"
 version = "0.2.0"
-dependencies = [
- "assert_matches",
- "async-stream",
- "error-ext",
- "futures",
- "secrecy",
- "serde",
- "serde_json",
- "serde_with",
- "sqlx",
- "testcontainers",
- "testcontainers-modules",
- "thiserror",
- "time",
- "tokio",
- "tracing",
- "tracing-test",
- "trait-variant",
- "uuid",
-]
-
-[[package]]
-name = "evented"
-version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ceb9b4ca7f3863ff27410ca5dce46ecdeda4ce53309e4f5e9be7cd1142514174"
 dependencies = [
@@ -1163,9 +1133,9 @@ dependencies = [
 
 [[package]]
 name = "httparse"
-version = "1.9.3"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0e7a4dd27b9476dc40cb050d3632d3bba3a70ddbff012285f7f8559a1e7e545"
+checksum = "9f3935c160d00ac752e09787e6e6bfc26494c2183cc922f1bc678a60d4733bc2"
 
 [[package]]
 name = "httpdate"
@@ -2480,7 +2450,7 @@ dependencies = [
  "axum 0.7.5",
  "configured",
  "error-ext",
- "evented 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evented",
  "futures",
  "opentelemetry",
  "opentelemetry-otlp",

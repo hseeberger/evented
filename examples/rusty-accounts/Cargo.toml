@@ -1,0 +1,46 @@
+[package]
+name          = "rusty-accounts"
+version       = "0.1.0"
+edition       = "2021"
+description   = "Simplistic banking demo built with EventSourced."
+authors       = [ "Heiko Seeberger <git@heikoseeberger.de>" ]
+license-file  = "LICENSE"
+readme        = "README.md"
+homepage      = "https://github.com/hseeberger/rusty-accounts"
+repository    = "https://github.com/hseeberger/rusty-accounts"
+documentation = "https://github.com/hseeberger/rusty-accounts"
+publish       = false
+
+[dependencies]
+anyhow                = { workspace = true }
+api-version           = { workspace = true }
+axum                  = { workspace = true, features = [ "http2", "json" ] }
+configured            = { workspace = true }
+error-ext             = { workspace = true, features = [ "axum", "utoipa" ] }
+evented               = { workspace = true }
+futures               = { workspace = true }
+opentelemetry         = { workspace = true }
+opentelemetry_sdk     = { workspace = true, features = [ "rt-tokio" ] }
+opentelemetry-otlp    = { workspace = true, features = [ "grpc-tonic", "trace" ] }
+secrecy               = { workspace = true }
+serde                 = { workspace = true, features = [ "derive" ] }
+serde_json            = { workspace = true }
+serde_with            = { workspace = true }
+sqlx                  = { workspace = true, features = [ "postgres", "runtime-tokio", "uuid" ] }
+thiserror             = { workspace = true }
+time                  = { workspace = true, features = [ "serde-human-readable" ] }
+tokio                 = { workspace = true, features = [ "rt-multi-thread", "signal" ] }
+tower                 = { workspace = true }
+tower-http            = { workspace = true, features = [ "cors", "trace" ] }
+tracing               = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber    = { workspace = true, features = [ "env-filter", "json" ] }
+trait-variant         = { workspace = true }
+utoipa                = { workspace = true, features = [ "axum_extras", "uuid" ] }
+utoipa-swagger-ui     = { workspace = true, features = [ "axum", "debug-embed" ] }
+uuid                  = { workspace = true, features = [ "serde", "v7" ] }
+
+[dev-dependencies]
+testcontainers         = { version = "0.17" }
+testcontainers-modules = { version = "0.5", features = [ "postgres" ] }
+tracing-test           = { version = "0.2" } # features = [ "no-env-filter" ]

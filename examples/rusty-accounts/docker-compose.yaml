@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - ./target/data/nats-data:/opt/js
+    command:
+      - "-js"
+      - "-sd"
+      - "/opt/js"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./target/data/postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: rusty-accounts
+      POSTGRES_PASSWORD: rusty-accounts
+      POSTGRES_DB: rusty-accounts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rusty-accounts"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
