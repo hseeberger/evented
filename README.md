@@ -12,11 +12,13 @@ evented is a library for [Event Sourcing](https://martinfowler.com/eaaDev/EventS
 
 The core abstraction of evented is an `EventSourcedEntity` which can be identified via an ID: an `Entity` implementation defines its state and event handling and associated `Command` implementations define its command handling.
 
-When an event-sourced entity receives a command, the respective command handler is called, which either returns a sequence of to be persisted events plus metadata or a rejection. If events are returned, these are transactionally persisted, thereby also invoking an optional `EventListener`. Concurrency is handled by optimistic locking via per event sequence numbers.
+When an event-sourced entity receives a command, the respective command handler is called, which either returns a sequence of to be persisted events plus metadata or a rejection. If events are returned, these are transactionally persisted, thereby also invoking an optional `EventListener`. Concurrency is handled by optimistic locking via per entity versions.
 
 When creating an event-sourced entity, its events are loaded and its state is conctructed by applying them to its event handler. This state is then used by the command handlers to decide whether a command should be accepted – resulting in events to be persisted and applied – or rejected.
 
-The following shows a simple example from the tests which uses an event listener to build a synchronous and consistent view. Actually this view need not be consistent, but real-world use cases for consistent views include uniqueness checks, e.g. email addresses for user entities.
+It is also possible to create asynchronous `Projection`s. These transactionally process events by populating their view(s) and storing the sequence number of the processed event. Currently only events by type projections are supported.
+
+The following shows a simple example from the tests which uses an event listener to build a synchronous and consistent view. Actually this view probably need not be consistent, but real-world use cases for consistent views include uniqueness checks, e.g. email addresses for user entities.
 
 ```rust
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -168,6 +170,8 @@ impl EventListener<Event> for Listener {
     }
 }
 ```
+
+More examples can be found in the [examples](./examples) directory.
 
 ## License ##
 

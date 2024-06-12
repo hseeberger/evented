@@ -1,0 +1,9 @@
+.dockerignore
+.gitignore
+.vscode
+**/.git
+Dockerfile
+justfile
+README.md
+release.toml
+target

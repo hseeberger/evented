@@ -1,3 +1,43 @@
+[workspace]
+members = [
+    ".",
+    "examples/rusty-accounts",
+]
+
+[workspace.dependencies]
+anyhow                 = { version = "1.0" }
+api-version            = { git = "https://github.com/scndcloud/api-version" }
+assert_matches         = { version = "1.5" }
+async-stream           = { version = "0.3" }
+axum                   = { version = "0.7" }
+configured             = { version = "0.7" }
+error-ext              = { version = "0.2" }
+evented                = { version = "0.2" }
+futures                = { version = "0.3" }
+opentelemetry          = { version = "0.23" }
+opentelemetry_sdk      = { version = "0.23" }
+opentelemetry-otlp     = { version = "0.16", default-features = false }
+secrecy                = { version = "0.8" }
+serde                  = { version = "1.0" }
+serde_json             = { version = "1.0" }
+serde_with             = { version = "3.8" }
+sqlx                   = { version = "0.7" }
+testcontainers         = { version = "0.17" }
+testcontainers-modules = { version = "0.5" }
+thiserror              = { version = "1.0" }
+time                   = { version = "0.3" }
+tokio                  = { version = "1" }
+tower                  = { version = "0.4" }
+tower-http             = { version = "0.5" }
+tracing                = { version = "0.1" }
+tracing-opentelemetry  = { version = "0.24" }
+tracing-subscriber     = { version = "0.3" }
+tracing-test           = { version = "0.2" }
+trait-variant          = { version = "0.1" }
+utoipa                 = { version = "4.2" }
+utoipa-swagger-ui      = { version = "7.1" }
+uuid                   = { version = "1.8" }
+
 [package]
 name          = "evented"
 version       = "0.2.0"
@@ -11,25 +51,25 @@ repository    = "https://github.com/hseeberger/evented"
 documentation = "https://github.com/hseeberger/evented"
 
 [dependencies]
-async-stream  = { version = "0.3" }
-error-ext     = { version = "0.2" }
-futures       = { version = "0.3" }
-secrecy       = { version = "0.8", features = [ "serde" ] }
-serde         = { version = "1.0", features = [ "derive" ] }
-serde_json    = { version = "1.0" }
-serde_with    = { version = "3.8" }
-sqlx          = { version = "0.7", default-features = false, features = [ "postgres", "runtime-tokio" ] }
-thiserror     = { version = "1.0" }
-tokio         = { version = "1", features = [ "sync" ] }
-tracing       = { version = "0.1" }
-trait-variant = { version = "0.1" }
+async-stream  = { workspace = true }
+error-ext     = { workspace = true }
+futures       = { workspace = true }
+secrecy       = { workspace = true, features = [ "serde" ] }
+serde         = { workspace = true, features = [ "derive" ] }
+serde_json    = { workspace = true }
+serde_with    = { workspace = true }
+sqlx          = { workspace = true, features = [ "postgres", "runtime-tokio" ] }
+thiserror     = { workspace = true }
+tokio         = { workspace = true }
+tracing       = { workspace = true }
+trait-variant = { workspace = true }
 
 [dev-dependencies]
-assert_matches         = { version = "1.5" }
-sqlx                   = { version = "0.7", default-features = false, features = [ "uuid" ] }
-testcontainers         = { version = "0.17" }
-testcontainers-modules = { version = "0.5", features = [ "postgres" ] }
-time                   = { version = "0.3", features = [ "serde-human-readable" ] }
-tokio                  = { version = "1", features = [ "macros" ] }
-tracing-test           = { version = "0.2" }
-uuid                   = { version = "1.8", features = [ "serde", "v7" ] }
+assert_matches         = { workspace = true }
+sqlx                   = { workspace = true, features = [ "uuid" ] }
+testcontainers         = { workspace = true }
+testcontainers-modules = { workspace = true, features = [ "postgres" ] }
+time                   = { workspace = true, features = [ "serde" ] }
+tokio                  = { workspace = true }
+tracing-test           = { workspace = true }
+uuid                   = { workspace = true, features = [ "serde" ] }
