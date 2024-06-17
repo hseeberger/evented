@@ -22,7 +22,7 @@ serde                  = { version = "1.0" }
 serde_json             = { version = "1.0" }
 serde_with             = { version = "3.8" }
 sqlx                   = { version = "0.7" }
-testcontainers         = { version = "0.17" }
+testcontainers         = { version = "0.18" }
 testcontainers-modules = { version = "0.5" }
 thiserror              = { version = "1.0" }
 time                   = { version = "0.3" }
