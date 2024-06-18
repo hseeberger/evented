@@ -67,14 +67,14 @@ mod tests {
     use crate::pool::{Config, Pool};
     use sqlx::postgres::PgSslMode;
     use std::{error::Error as StdError, ops::Deref};
-    use testcontainers::{runners::AsyncRunner, RunnableImage};
+    use testcontainers::{runners::AsyncRunner, ContainerRequest, ImageExt};
     use testcontainers_modules::postgres::Postgres;
 
     type TestResult = Result<(), Box<dyn StdError>>;
 
     #[tokio::test]
     async fn test_pool() -> TestResult {
-        let container = RunnableImage::from(Postgres::default())
+        let container = ContainerRequest::from(Postgres::default())
             .with_tag("16-alpine")
             .start()
             .await?;

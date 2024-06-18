@@ -433,7 +433,7 @@ mod tests {
     use serde_json::Value;
     use sqlx::{postgres::PgSslMode, Executor, Postgres, QueryBuilder, Row, Transaction};
     use std::{iter::once, time::Duration};
-    use testcontainers::{runners::AsyncRunner, RunnableImage};
+    use testcontainers::{runners::AsyncRunner, ContainerRequest, ImageExt};
     use testcontainers_modules::postgres::Postgres as TCPostgres;
     use tokio::time::sleep;
     use tracing_test::traced_test;
@@ -464,7 +464,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test() -> Result<(), BoxError> {
-        let container = RunnableImage::from(TCPostgres::default())
+        let container = ContainerRequest::from(TCPostgres::default())
             .with_tag("16-alpine")
             .start()
             .await?;
