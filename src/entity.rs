@@ -134,17 +134,17 @@ where
     /// Build the [EventSourcedEntity] by loading and applying the current events.
     pub async fn build(self, id: E::Id, pool: Pool) -> Result<EventSourcedEntity<E, L>, Error> {
         let events = current_events_by_id::<E>(&id, &pool).await;
-        let (version, entity) = events
-            .try_fold((0u64, self.entity), |(_, mut state), (version, event)| {
+        let (last_version, entity) = events
+            .try_fold((None, self.entity), |(_, mut state), (version, event)| {
                 state.handle_event(event);
-                ok((version.get(), state))
+                ok((Some(version), state))
             })
             .await?;
 
         Ok(EventSourcedEntity {
             entity,
             id,
-            last_version: version.try_into().ok(),
+            last_version,
             pool,
             listener: self.listener,
         })
