@@ -134,17 +134,17 @@ where
     /// Build the [EventSourcedEntity] by loading and applying the current events.
     pub async fn build(self, id: E::Id, pool: Pool) -> Result<EventSourcedEntity<E, L>, Error> {
         let events = current_events_by_id::<E>(&id, &pool).await;
-        let entity = events
-            .try_fold(self.entity, |mut state, (_, event)| {
+        let (last_version, entity) = events
+            .try_fold((None, self.entity), |(_, mut state), (version, event)| {
                 state.handle_event(event);
-                ok(state)
+                ok((Some(version), state))
             })
             .await?;
 
         Ok(EventSourcedEntity {
             entity,
             id,
-            last_version: None,
+            last_version,
             pool,
             listener: self.listener,
         })
@@ -625,7 +625,7 @@ mod tests {
 
         let id = Uuid::from_u128(0);
 
-        let mut counter = Counter::default().entity().build(id, pool).await?;
+        let mut counter = Counter::default().entity().build(id, pool.clone()).await?;
         assert_eq!(counter.entity, Counter(0));
 
         let result = counter.handle_command(Decrease(1)).await?;
@@ -633,8 +633,12 @@ mod tests {
 
         let result = counter.handle_command(Increase(40)).await?;
         assert_eq!(result, Ok(&Counter(40)));
+
         let result = counter.handle_command(Decrease(20)).await?;
         assert_eq!(result, Ok(&Counter(20)));
+
+        // reinstantiate the counter (to test that event recovery works)
+        let mut counter = Counter::default().entity().build(id, pool).await?;
         let result = counter.handle_command(Increase(22)).await?;
         assert_eq!(result, Ok(&Counter(42)));
 
