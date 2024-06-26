@@ -84,8 +84,8 @@ impl<E> EntityExt for E where E: Entity {}
 /// An event with metadata, as returned by the command handler.
 #[derive(Debug)]
 pub struct EventWithMetadata<E, M> {
-    event: E,
-    metadata: M,
+    pub event: E,
+    pub metadata: M,
 }
 
 impl<E> From<E> for EventWithMetadata<E, ()> {
