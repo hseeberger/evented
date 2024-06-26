@@ -772,6 +772,26 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "evented"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceb9b4ca7f3863ff27410ca5dce46ecdeda4ce53309e4f5e9be7cd1142514174"
+dependencies = [
+ "async-stream",
+ "error-ext",
+ "futures",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "trait-variant",
+]
+
+[[package]]
+name = "evented"
+version = "0.2.1"
 dependencies = [
  "assert_matches",
  "async-stream",
@@ -791,26 +811,6 @@ dependencies = [
  "tracing-test",
  "trait-variant",
  "uuid",
-]
-
-[[package]]
-name = "evented"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceb9b4ca7f3863ff27410ca5dce46ecdeda4ce53309e4f5e9be7cd1142514174"
-dependencies = [
- "async-stream",
- "error-ext",
- "futures",
- "secrecy",
- "serde",
- "serde_json",
- "serde_with",
- "sqlx",
- "thiserror",
- "tokio",
- "tracing",
- "trait-variant",
 ]
 
 [[package]]
@@ -2788,7 +2788,7 @@ dependencies = [
  "axum 0.7.5",
  "configured",
  "error-ext",
- "evented 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evented 0.2.0",
  "futures",
  "opentelemetry",
  "opentelemetry-otlp",
