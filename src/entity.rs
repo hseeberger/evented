@@ -266,10 +266,11 @@ where
     sqlx::query(
         "SELECT version, event
          FROM event
-         WHERE entity_id = $1
+         WHERE entity_id = $1 AND type_name = $2
          ORDER BY seq_no ASC",
     )
     .bind(id)
+    .bind(E::TYPE_NAME)
     .fetch(&**pool)
     .map_err(|error| Error::Sqlx("cannot get next event".to_string(), error))
     .map(|row| {
@@ -306,9 +307,10 @@ where
     let version = sqlx::query(
         "SELECT MAX(version)
          FROM event
-         WHERE entity_id = $1",
+         WHERE entity_id = $1 AND type_name = $2",
     )
     .bind(id)
+    .bind(E::TYPE_NAME)
     .fetch_one(&mut *tx)
     .await
     .map_err(|error| Error::Sqlx("cannot select max version".to_string(), error))
@@ -568,7 +570,7 @@ mod tests {
         )
         .bind(&id)
         .bind(1_i64)
-        .bind("test")
+        .bind("counter")
         .bind(serde_json::to_value(&Event::Increased { id, inc: 40 })?)
         .bind(Value::Null)
         .execute(&*pool)
@@ -579,7 +581,7 @@ mod tests {
         )
         .bind(&id)
         .bind(2_i64)
-        .bind("test")
+        .bind("counter")
         .bind(serde_json::to_value(&Event::Decreased { id, dec: 20 })?)
         .bind(Value::Null)
         .execute(&*pool)
@@ -590,7 +592,7 @@ mod tests {
         )
         .bind(&id)
         .bind(3_i64)
-        .bind("test")
+        .bind("counter")
         .bind(serde_json::to_value(&Event::Increased { id, inc: 22 })?)
         .bind(Value::Null)
         .execute(&*pool)
