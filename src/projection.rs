@@ -427,14 +427,13 @@ mod tests {
     use crate::{
         pool::{Config, Pool},
         projection::{ErrorStrategy, EventHandler, Projection, State},
+        test::run_postgres,
     };
     use assert_matches::assert_matches;
     use error_ext::BoxError;
     use serde_json::Value;
     use sqlx::{postgres::PgSslMode, Executor, Postgres, QueryBuilder, Row, Transaction};
     use std::{iter::once, time::Duration};
-    use testcontainers::{runners::AsyncRunner, ContainerRequest, ImageExt};
-    use testcontainers_modules::postgres::Postgres as TCPostgres;
     use tokio::time::sleep;
     use tracing_test::traced_test;
     use uuid::Uuid;
@@ -464,10 +463,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test() -> Result<(), BoxError> {
-        let container = ContainerRequest::from(TCPostgres::default())
-            .with_tag("16-alpine")
-            .start()
-            .await?;
+        let container = run_postgres().await?;
         let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
