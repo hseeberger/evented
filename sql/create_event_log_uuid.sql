@@ -6,5 +6,5 @@ CREATE TABLE
     type_name text NOT NULL,
     event jsonb NOT NULL,
     metadata jsonb NOT NULL,
-    UNIQUE (entity_id, version)
+    UNIQUE (entity_id, type_name, version)
   );
