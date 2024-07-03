@@ -364,14 +364,13 @@ mod tests {
     use crate::{
         entity::{Command, Entity, EntityExt, EventExt, EventListener, EventWithMetadata},
         pool::{Config, Pool},
+        test::run_postgres,
     };
     use error_ext::BoxError;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
     use sqlx::{postgres::PgSslMode, Executor, Row, Transaction};
     use std::error::Error as StdError;
-    use testcontainers::{runners::AsyncRunner, ContainerRequest, ImageExt};
-    use testcontainers_modules::postgres::Postgres;
     use time::OffsetDateTime;
     use uuid::Uuid;
 
@@ -542,10 +541,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_load() -> TestResult {
-        let container = ContainerRequest::from(Postgres::default())
-            .with_tag("16-alpine")
-            .start()
-            .await?;
+        let container = run_postgres().await?;
         let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
@@ -604,10 +600,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_command() -> TestResult {
-        let container = ContainerRequest::from(Postgres::default())
-            .with_tag("16-alpine")
-            .start()
-            .await?;
+        let container = run_postgres().await?;
         let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
@@ -647,10 +640,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event_listener() -> TestResult {
-        let container = ContainerRequest::from(Postgres::default())
-            .with_tag("16-alpine")
-            .start()
-            .await?;
+        let container = run_postgres().await?;
         let pg_port = container.get_host_port_ipv4(5432).await?;
 
         let config = Config {
