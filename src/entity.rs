@@ -266,10 +266,11 @@ where
     sqlx::query(
         "SELECT version, event
          FROM event
-         WHERE entity_id = $1
+         WHERE entity_id = $1 AND type_name = $2
          ORDER BY seq_no ASC",
     )
     .bind(id)
+    .bind(E::TYPE_NAME)
     .fetch(&**pool)
     .map_err(|error| Error::Sqlx("cannot get next event".to_string(), error))
     .map(|row| {
@@ -306,9 +307,10 @@ where
     let version = sqlx::query(
         "SELECT MAX(version)
          FROM event
-         WHERE entity_id = $1",
+         WHERE entity_id = $1 AND type_name = $2",
     )
     .bind(id)
+    .bind(E::TYPE_NAME)
     .fetch_one(&mut *tx)
     .await
     .map_err(|error| Error::Sqlx("cannot select max version".to_string(), error))
@@ -368,7 +370,7 @@ mod tests {
     };
     use error_ext::BoxError;
     use serde::{Deserialize, Serialize};
-    use serde_json::Value;
+    use serde_json::{json, Value};
     use sqlx::{postgres::PgSslMode, Executor, Row, Transaction};
     use std::error::Error as StdError;
     use time::OffsetDateTime;
@@ -564,7 +566,7 @@ mod tests {
         )
         .bind(&id)
         .bind(1_i64)
-        .bind("test")
+        .bind("counter")
         .bind(serde_json::to_value(&Event::Increased { id, inc: 40 })?)
         .bind(Value::Null)
         .execute(&*pool)
@@ -575,7 +577,7 @@ mod tests {
         )
         .bind(&id)
         .bind(2_i64)
-        .bind("test")
+        .bind("counter")
         .bind(serde_json::to_value(&Event::Decreased { id, dec: 20 })?)
         .bind(Value::Null)
         .execute(&*pool)
@@ -586,7 +588,7 @@ mod tests {
         )
         .bind(&id)
         .bind(3_i64)
-        .bind("test")
+        .bind("counter")
         .bind(serde_json::to_value(&Event::Increased { id, inc: 22 })?)
         .bind(Value::Null)
         .execute(&*pool)
@@ -617,6 +619,19 @@ mod tests {
         (&*pool).execute(ddl).await?;
 
         let id = Uuid::from_u128(0);
+
+        // insert misleading event into table that should be ignored for the counter entity
+        sqlx::query(
+            "INSERT INTO event (entity_id, version, type_name, event, metadata)
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(&id)
+        .bind(1_i64)
+        .bind("faker")
+        .bind(json!({ "name": "Meier", "address": "Musterstraße 42" }))
+        .bind(Value::Null)
+        .execute(&*pool)
+        .await?;
 
         let mut counter = Counter::default().entity().build(id, pool.clone()).await?;
         assert_eq!(counter.entity, Counter(0));
