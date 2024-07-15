@@ -2710,7 +2710,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sqlx",
- "testcontainers 0.17.0",
+ "testcontainers 0.19.0",
  "testcontainers-modules",
  "thiserror",
  "time",
