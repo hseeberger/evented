@@ -42,5 +42,5 @@ uuid                  = { workspace = true, features = [ "serde", "v7" ] }
 
 [dev-dependencies]
 testcontainers         = { version = "0.17" }
-testcontainers-modules = { version = "0.5", features = [ "postgres" ] }
+testcontainers-modules = { version = "0.8", features = [ "postgres" ] }
 tracing-test           = { version = "0.2" } # features = [ "no-env-filter" ]
