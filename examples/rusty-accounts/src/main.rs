@@ -16,7 +16,7 @@ use evented::{
     pool::{self, Pool},
     projection::{ErrorStrategy, Projection},
 };
-use opentelemetry::{global, KeyValue};
+use opentelemetry::{global, trace::TracerProvider, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{propagation::TraceContextPropagator, runtime, trace, Resource};
 use serde::Deserialize;
@@ -94,7 +94,7 @@ where
         .tonic()
         .with_endpoint(config.otlp_exporter_endpoint);
 
-    let trace_config = trace::config().with_resource(Resource::new(vec![KeyValue::new(
+    let trace_config = trace::Config::default().with_resource(Resource::new(vec![KeyValue::new(
         "service.name",
         config.service_name,
     )]));
@@ -104,7 +104,8 @@ where
         .with_exporter(exporter)
         .with_trace_config(trace_config)
         .install_batch(runtime::Tokio)
-        .context("install tracer")?;
+        .context("install tracer")?
+        .tracer("rusty-accounts");
 
     Ok(tracing_opentelemetry::layer().with_tracer(tracer))
 }
