@@ -14,15 +14,13 @@ mod tests {
     use evented::projection::EventHandler;
     use futures::TryStreamExt;
     use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-    use testcontainers::{runners::AsyncRunner, RunnableImage};
+    use testcontainers::{runners::AsyncRunner, ImageExt};
     use testcontainers_modules::postgres::Postgres as TCPostgres;
     use uuid::Uuid;
 
     #[tokio::test]
     async fn test_account_repo_event_handler() -> Result<(), BoxError> {
-        let container =
-            AsyncRunner::start(RunnableImage::from(TCPostgres::default()).with_tag("16-alpine"))
-                .await?;
+        let container = TCPostgres::default().with_tag("16-alpine").start().await?;
         let port = container.get_host_port_ipv4(5432).await?;
 
         let cnn_url = format!("postgresql://postgres:postgres@localhost:{port}");

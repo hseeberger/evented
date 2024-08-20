@@ -12,7 +12,7 @@ async-stream           = { version = "0.3" }
 axum                   = { version = "0.7" }
 configured             = { version = "0.7" }
 error-ext              = { version = "0.2" }
-evented                = { version = "0.2" }
+evented                = { path = "." }
 futures                = { version = "0.3" }
 opentelemetry          = { version = "0.24" }
 opentelemetry_sdk      = { version = "0.24" }
@@ -21,8 +21,8 @@ secrecy                = { version = "0.8" }
 serde                  = { version = "1.0" }
 serde_json             = { version = "1.0" }
 serde_with             = { version = "3.9" }
-sqlx                   = { version = "0.7" }
-testcontainers         = { version = "0.19" }
+sqlx                   = { version = "0.8" }
+testcontainers         = { version = "0.21" }
 thiserror              = { version = "1.0" }
 time                   = { version = "0.3" }
 tokio                  = { version = "1" }
