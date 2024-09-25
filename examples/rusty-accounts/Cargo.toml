@@ -41,6 +41,6 @@ utoipa-swagger-ui     = { workspace = true, features = [ "axum", "debug-embed" ]
 uuid                  = { workspace = true, features = [ "serde", "v7" ] }
 
 [dev-dependencies]
-testcontainers         = { version = "0.21" }
+testcontainers         = { version = "0.23" }
 testcontainers-modules = { version = "0.9", features = [ "postgres" ] }
 tracing-test           = { version = "0.2" } # features = [ "no-env-filter" ]
