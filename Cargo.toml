@@ -20,7 +20,7 @@ opentelemetry-otlp     = { version = "0.17", default-features = false }
 secrecy                = { version = "0.8" }
 serde                  = { version = "1.0" }
 serde_json             = { version = "1.0" }
-serde_with             = { version = "3.10" }
+serde_with             = { version = "3.11" }
 sqlx                   = { version = "0.8" }
 testcontainers         = { version = "0.21" }
 thiserror              = { version = "1.0" }
