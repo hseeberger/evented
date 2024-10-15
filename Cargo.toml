@@ -39,7 +39,7 @@ uuid                   = { version = "1.10" }
 
 [package]
 name          = "evented"
-version       = "0.2.3"
+version       = "0.2.4"
 edition       = "2021"
 description   = "Event Sourcing in Rust on top of PostgreSQL"
 authors       = [ "Heiko Seeberger <git@heikoseeberger.de>" ]
