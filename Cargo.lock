@@ -2418,7 +2418,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
- "tower 0.4.13",
+ "tower 0.5.1",
  "tower-http",
  "tracing",
  "tracing-opentelemetry",
@@ -3281,6 +3281,10 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
 dependencies = [
+ "futures-core",
+ "futures-util",
+ "pin-project-lite",
+ "sync_wrapper 0.1.2",
  "tower-layer",
  "tower-service",
 ]
