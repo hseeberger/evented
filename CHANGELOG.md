@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4](https://github.com/hseeberger/evented/compare/evented-v0.2.3...evented-v0.2.4) - 2024-10-15
+
+### Other
+
+- update secrecy to 0.10 ([#119](https://github.com/hseeberger/evented/pull/119))
+- *(deps)* bump tower from 0.4.13 to 0.5.1 ([#118](https://github.com/hseeberger/evented/pull/118))
+- *(deps)* bump serde_with from 3.10.0 to 3.11.0 ([#115](https://github.com/hseeberger/evented/pull/115))
+- *(deps)* bump serde_with from 3.9.0 to 3.10.0 ([#110](https://github.com/hseeberger/evented/pull/110))
+
 ## [0.2.3](https://github.com/hseeberger/evented/compare/evented-v0.2.2...evented-v0.2.3) - 2024-08-20
 
 ### Other
