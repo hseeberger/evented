@@ -79,7 +79,7 @@ checksum = "c042108f3ed77fd83760a5fd79b53be043192bb3b9dba91d8c574c0ada7850c8"
 [[package]]
 name = "api-version"
 version = "0.1.0"
-source = "git+https://github.com/scndcloud/api-version#5d7416414b32387d1b60a5004cfae13d88f4d47e"
+source = "git+https://github.com/scndcloud/api-version#b3ed18d6f9e00fc245f9f5a563f537dfe6c2393b"
 dependencies = [
  "array-macro",
  "axum",
