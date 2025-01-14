@@ -35,7 +35,7 @@ tracing-test           = { version = "0.2" }
 trait-variant          = { version = "0.1" }
 utoipa                 = { version = "4.2" }
 utoipa-swagger-ui      = { version = "7.1" }
-uuid                   = { version = "1.11" }
+uuid                   = { version = "1.12" }
 
 [package]
 name          = "evented"
